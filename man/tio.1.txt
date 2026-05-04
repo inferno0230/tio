@@ -10,9 +10,10 @@ DESCRIPTION
        tio is a serial device tool which features a straightforward command-line and configuration file interface to easily connect to serial TTY devices for basic I/O operations.
 
 OPTIONS
-       -b, --baudrate <bps>
+       -b, --baudrate <bps>[,<bps>...]
 
-              Set baud rate [bps] (default: 115200).
+              Set baud rate or known baud rates [bps] (default: 115200). The first value is used initially. If more than one value is configured, automatic baud switching is enabled and restricted to
+              the configured values.
 
        -d, --databits 5|6|7|8
 
@@ -306,7 +307,11 @@ KEY COMMANDS
 
        ctrl-t ?        List available key commands
 
+       ctrl-t a        Toggle automatic baud switching
+
        ctrl-t b        Send serial break (triggers SysRq on Linux, etc.)
+
+       ctrl-t B        Cycle to the next configured baud rate
 
        ctrl-t c        Show configuration (baudrate, databits, etc.)
 
@@ -431,7 +436,7 @@ CONFIGURATION FILE
 
        device                   TTY device to open. If it contains a "%s" it is substituted with the first group match.
 
-       baudrate                 Set baud rate
+       baudrate                 Set baud rate or comma separated list of known baud rates
 
        databits                 Set data bits
 

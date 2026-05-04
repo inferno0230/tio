@@ -25,6 +25,7 @@
 #include <regex.h>
 #include <getopt.h>
 #include <errno.h>
+#include <ctype.h>
 #include "version.h"
 #include "config.h"
 #include "misc.h"
@@ -66,6 +67,10 @@ struct option_t option =
 {
     .target = "",
     .baudrate = 115200,
+    .baudrates = { 115200 },
+    .baudrates_count = 1,
+    .baudrate_index = 0,
+    .auto_baud_enabled = false,
     .databits = 8,
     .flow = FLOW_NONE,
     .stopbits = 1,
@@ -135,7 +140,7 @@ void option_print_help(char *argv[])
     printf("Connect to TTY device directly or via configuration profile or topology ID.\n");
     printf("\n");
     printf("Options:\n");
-    printf("  -b, --baudrate <bps>                   Baud rate (default: 115200)\n");
+    printf("  -b, --baudrate <bps>[,<bps>...]        Baud rate(s) (default: 115200)\n");
     printf("  -d, --databits 5|6|7|8                 Data bits (default: 8)\n");
     printf("  -f, --flow hard|soft|none              Flow control (default: none)\n");
     printf("  -s, --stopbits 1|2                     Stop bits (default: 1)\n");
@@ -226,6 +231,109 @@ int option_string_to_integer(const char *string, int *value, const char *desc, i
     }
 
     return 0;
+}
+
+static char *trim(char *string)
+{
+    char *end;
+
+    while (isspace((unsigned char)*string))
+    {
+        string++;
+    }
+
+    if (*string == 0)
+    {
+        return string;
+    }
+
+    end = string + strlen(string) - 1;
+    while ((end > string) && isspace((unsigned char)*end))
+    {
+        end--;
+    }
+
+    *(end + 1) = 0;
+
+    return string;
+}
+
+void option_parse_baudrates(const char *arg)
+{
+    char *token = NULL;
+    char *buffer;
+    int baudrates[OPTION_BAUDRATES_MAX];
+    int count = 0;
+
+    assert(arg != NULL);
+
+    buffer = strdup(arg);
+
+    for (size_t i = 0; i<strlen(buffer); i++)
+    {
+        if ((buffer[i] == '[') || (buffer[i] == ']') || (buffer[i] == ';'))
+        {
+            buffer[i] = ',';
+        }
+    }
+
+    while ((token = strtok(token == NULL ? buffer : NULL, ",")) != NULL)
+    {
+        int baudrate;
+        char *value = trim(token);
+
+        if (*value == 0)
+        {
+            continue;
+        }
+
+        if (count >= OPTION_BAUDRATES_MAX)
+        {
+            tio_error_print("Too many baudrates configured (max %d)", OPTION_BAUDRATES_MAX);
+            exit(EXIT_FAILURE);
+        }
+
+        option_string_to_integer(value, &baudrate, "baudrate", 0, INT_MAX);
+        baudrates[count++] = baudrate;
+    }
+
+    if (count == 0)
+    {
+        tio_error_print("Missing baudrate");
+        exit(EXIT_FAILURE);
+    }
+
+    memcpy(option.baudrates, baudrates, sizeof(int) * count);
+    option.baudrates_count = count;
+    option.baudrate_index = 0;
+    option.baudrate = option.baudrates[0];
+    option.auto_baud_enabled = (count > 1);
+
+    free(buffer);
+}
+
+void option_baudrates_to_string(char *buffer, size_t length)
+{
+    size_t offset = 0;
+
+    if (length == 0)
+    {
+        return;
+    }
+
+    buffer[0] = 0;
+
+    for (int i=0; i<option.baudrates_count; i++)
+    {
+        int written = snprintf(buffer + offset, length - offset, "%s%d", i == 0 ? "" : ",", option.baudrates[i]);
+
+        if ((written < 0) || ((size_t)written >= length - offset))
+        {
+            break;
+        }
+
+        offset += written;
+    }
 }
 
 void option_parse_flow(const char *arg, flow_t *flow)
@@ -820,8 +928,13 @@ void option_parse_mappings(const char *map)
 
 void options_print()
 {
+    char baudrates[128];
+
     tio_printf(" Device: %s", device_name);
     tio_printf(" Baudrate: %u", option.baudrate);
+    option_baudrates_to_string(baudrates, sizeof(baudrates));
+    tio_printf(" Baudrates: %s", baudrates);
+    tio_printf(" Auto baud switch: %s", option.auto_baud_enabled ? "true" : "false");
     tio_printf(" Databits: %d", option.databits);
     tio_printf(" Flow: %s", option_flow_to_string(option.flow));
     tio_printf(" Stopbits: %d", option.stopbits);
@@ -956,7 +1069,7 @@ void options_parse(int argc, char *argv[])
                 break;
 
             case 'b':
-                option_string_to_integer(optarg, &option.baudrate, "baudrate", 0, INT_MAX);
+                option_parse_baudrates(optarg);
                 break;
 
             case 'd':

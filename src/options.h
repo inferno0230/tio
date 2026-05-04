@@ -23,10 +23,13 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include "script.h"
 #include "timestamp.h"
 #include "alert.h"
 #include "tty.h"
+
+#define OPTION_BAUDRATES_MAX 16
 
 typedef enum
 {
@@ -48,6 +51,10 @@ struct option_t
 {
     char *target;
     int baudrate;
+    int baudrates[OPTION_BAUDRATES_MAX];
+    int baudrates_count;
+    int baudrate_index;
+    bool auto_baud_enabled;
     int databits;
     flow_t flow;
     int stopbits;
@@ -115,6 +122,9 @@ void options_parse(int argc, char *argv[]);
 void options_parse_final(int argc, char *argv[]);
 
 int option_string_to_integer(const char *string, int *value, const char *desc, int min, int max);
+
+void option_parse_baudrates(const char *arg);
+void option_baudrates_to_string(char *buffer, size_t length);
 
 void option_parse_flow(const char *arg, flow_t *flow);
 void option_parse_parity(const char *arg, parity_t *parity);

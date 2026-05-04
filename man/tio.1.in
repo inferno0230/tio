@@ -17,9 +17,11 @@ basic I/O operations.
 .SH "OPTIONS"
 
 .TP
-.BR \-b ", " "\-\-baudrate " \fI<bps>
+.BR \-b ", " "\-\-baudrate " \fI<bps>[,<bps>...]
 
-Set baud rate [bps] (default: 115200).
+Set baud rate or known baud rates [bps] (default: 115200).
+The first value is used initially. If more than one value is configured,
+automatic baud switching is enabled and restricted to the configured values.
 .TP
 .BR \-d ", " "\-\-databits " 5 | 6 | 7 | 8
 
@@ -389,8 +391,12 @@ Display help.
 In session, all key strokes are forwarded to the serial device except the following key sequence: a prefix key (default: ctrl-t) followed by a command key. These sequences are intercepted as key commands:
 .IP "\fBctrl-t ?"
 List available key commands
+.IP "\fBctrl-t a"
+Toggle automatic baud switching
 .IP "\fBctrl-t b"
 Send serial break (triggers SysRq on Linux, etc.)
+.IP "\fBctrl-t B"
+Cycle to the next configured baud rate
 .IP "\fBctrl-t c"
 Show configuration (baudrate, databits, etc.)
 .IP "\fBctrl-t e"
@@ -537,7 +543,7 @@ Pattern matching user input. This pattern can be an extended regular expression 
 .IP "\fBdevice"
 TTY device to open. If it contains a "%s" it is substituted with the first group match.
 .IP "\fBbaudrate"
-Set baud rate
+Set baud rate or comma separated list of known baud rates
 .IP "\fBdatabits"
 Set data bits
 .IP "\fBflow"
