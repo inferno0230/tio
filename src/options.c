@@ -25,6 +25,7 @@
 #include <regex.h>
 #include <getopt.h>
 #include <errno.h>
+#include <ctype.h>
 #include "version.h"
 #include "config.h"
 #include "misc.h"
@@ -66,6 +67,10 @@ struct option_t option =
 {
     .target = "",
     .baudrate = 115200,
+    .baudrates = { 115200 },
+    .baudrates_count = 1,
+    .baudrate_index = 0,
+    .auto_baud_enabled = false,
     .databits = 8,
     .flow = FLOW_NONE,
     .stopbits = 1,
@@ -135,7 +140,7 @@ void option_print_help(char *argv[])
     printf("Connect to TTY device directly or via configuration profile or topology ID.\n");
     printf("\n");
     printf("Options:\n");
-    printf("  -b, --baudrate <bps>                   Baud rate (default: 115200)\n");
+    printf("  -b, --baudrate <bps>[,<bps>...]        Baud rate(s) (default: 115200)\n");
     printf("  -d, --databits 5|6|7|8                 Data bits (default: 8)\n");
     printf("  -f, --flow hard|soft|none              Flow control (default: none)\n");
     printf("  -s, --stopbits 1|2                     Stop bits (default: 1)\n");
@@ -226,6 +231,156 @@ int option_string_to_integer(const char *string, int *value, const char *desc, i
     }
 
     return 0;
+}
+
+static char *trim_inplace(char *string)
+{
+    char *end;
+
+    while (isspace((unsigned char)*string))
+    {
+        string++;
+    }
+
+    if (*string == 0)
+    {
+        return string;
+    }
+
+    end = string + strlen(string) - 1;
+    while ((end > string) && isspace((unsigned char)*end))
+    {
+        end--;
+    }
+
+    *(end + 1) = 0;
+
+    return string;
+}
+
+static bool baudrate_exists(int baudrates[], int count, int baudrate)
+{
+    for (int i = 0; i < count; i++)
+    {
+        if (baudrates[i] == baudrate)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool baudrate_string_to_integer(const char *string, int *baudrate)
+{
+    long value;
+    char *end_token;
+
+    errno = 0;
+    value = strtol(string, &end_token, 10);
+    if ((errno != 0) || (*end_token != 0) || (value <= 0) || (value > INT_MAX))
+    {
+        return false;
+    }
+
+    *baudrate = value;
+    return true;
+}
+
+void option_parse_baudrates(const char *arg)
+{
+    char *token = NULL;
+    char *buffer;
+    int baudrates[OPTION_BAUDRATES_MAX];
+    int count = 0;
+
+    assert(arg != NULL);
+
+    buffer = strdup(arg);
+    if (buffer == NULL)
+    {
+        tio_error_print("Could not allocate baudrate buffer");
+        exit(EXIT_FAILURE);
+    }
+
+    while ((token = strtok(token == NULL ? buffer : NULL, ",")) != NULL)
+    {
+        int baudrate;
+        char *value = trim_inplace(token);
+
+        if (*value == 0)
+        {
+            continue;
+        }
+
+        if (!baudrate_string_to_integer(value, &baudrate))
+        {
+            tio_error_print("Invalid baudrate '%s'", value);
+            goto error;
+        }
+
+        if (!tty_baudrate_is_supported(baudrate))
+        {
+            tio_error_print("Invalid baudrate '%d'", baudrate);
+            goto error;
+        }
+
+        if (baudrate_exists(baudrates, count, baudrate))
+        {
+            continue;
+        }
+
+        if (count >= OPTION_BAUDRATES_MAX)
+        {
+            tio_error_print("Too many baudrates configured (max %d)", OPTION_BAUDRATES_MAX);
+            goto error;
+        }
+
+        baudrates[count++] = baudrate;
+    }
+
+    if (count == 0)
+    {
+        tio_error_print("Missing baudrate");
+        goto error;
+    }
+
+    memcpy(option.baudrates, baudrates, sizeof(int) * count);
+    option.baudrates_count = count;
+    option.baudrate_index = 0;
+    option.baudrate = option.baudrates[0];
+    option.auto_baud_enabled = (count > 1);
+
+    free(buffer);
+    return;
+
+error:
+    free(buffer);
+    exit(EXIT_FAILURE);
+}
+
+void option_baudrates_to_string(char *buffer, size_t length)
+{
+    size_t offset = 0;
+
+    if (length == 0)
+    {
+        return;
+    }
+
+    buffer[0] = 0;
+
+    for (int i = 0; i < option.baudrates_count; i++)
+    {
+        int written = snprintf(buffer + offset, length - offset, "%s%d", i == 0 ? "" : ",", option.baudrates[i]);
+
+        if ((written < 0) || ((size_t)written >= length - offset))
+        {
+            break;
+        }
+
+        offset += written;
+    }
 }
 
 void option_parse_flow(const char *arg, flow_t *flow)
@@ -822,6 +977,14 @@ void options_print()
 {
     tio_printf(" Device: %s", device_name);
     tio_printf(" Baudrate: %u", option.baudrate);
+    if (option.baudrates_count > 1)
+    {
+        char baudrates[128];
+
+        option_baudrates_to_string(baudrates, sizeof(baudrates));
+        tio_printf(" Baudrates: %s", baudrates);
+        tio_printf(" Auto baud switch: %s", option.auto_baud_enabled ? "true" : "false");
+    }
     tio_printf(" Databits: %d", option.databits);
     tio_printf(" Flow: %s", option_flow_to_string(option.flow));
     tio_printf(" Stopbits: %d", option.stopbits);
@@ -956,7 +1119,7 @@ void options_parse(int argc, char *argv[])
                 break;
 
             case 'b':
-                option_string_to_integer(optarg, &option.baudrate, "baudrate", 0, INT_MAX);
+                option_parse_baudrates(optarg);
                 break;
 
             case 'd':

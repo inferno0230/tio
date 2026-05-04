@@ -11,6 +11,7 @@
 
 [default]
 baudrate = 115200
+auto-baud = false
 databits = 8
 flow = none
 stopbits = 1

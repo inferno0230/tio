@@ -74,6 +74,7 @@ extern bool interactive_mode;
 
 void stdout_configure(void);
 void stdin_configure(void);
+bool tty_baudrate_is_supported(int baudrate);
 void tty_configure(void);
 void tty_reconfigure(void);
 int tty_connect(void);

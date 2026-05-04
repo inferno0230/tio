@@ -109,7 +109,7 @@ Usage: tio [<options>] <tty-device|profile|tid>
 Connect to TTY device directly or via configuration profile or topology ID.
 
 Options:
-  -b, --baudrate <bps>                   Baud rate (default: 115200)
+  -b, --baudrate <bps>[,<bps>...]        Baud rate(s) (default: 115200)
   -d, --databits 5|6|7|8                 Data bits (default: 8)
   -f, --flow hard|soft|none              Flow control (default: none)
   -s, --stopbits 1|2                     Stop bits (default: 1)
@@ -173,6 +173,15 @@ Which corresponds to the commonly used default options:
 ```
 $ tio --baudrate 115200 --databits 8 --flow none --stopbits 1 --parity none /dev/ttyUSB0
 ```
+
+Known baud rates can be listed in order for devices that switch baud rate
+during boot:
+```
+$ tio --baudrate 115200,9600 /dev/ttyUSB0
+```
+The first value is used initially. Automatic baud switching uses a
+printable-character heuristic, only tries the configured values, and can be
+toggled during a session with ctrl-t a.
 
 List available serial devices:
 ```
@@ -305,7 +314,9 @@ ctrl-t ? to list the available key commands.
 ```
 [15:02:53.269] Key commands:
 [15:02:53.269]  ctrl-t ?       List available key commands
+[15:02:53.269]  ctrl-t a       Toggle auto baud switch
 [15:02:53.269]  ctrl-t b       Send break
+[15:02:53.269]  ctrl-t B       Cycle to next configured baudrate
 [15:02:53.269]  ctrl-t c       Show configuration
 [15:02:53.269]  ctrl-t e       Toggle local echo mode
 [15:02:53.269]  ctrl-t f       Toggle log to file

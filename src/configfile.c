@@ -151,7 +151,18 @@ static void config_parse_keys(GKeyFile *key_file, char *group)
     char *string = NULL;
 
     config_get_string(key_file, group, "device", &config.device, NULL);
-    config_get_integer(key_file, group, "baudrate", &option.baudrate, 0, INT_MAX);
+    config_get_string(key_file, group, "baudrate", &string, NULL);
+    if (string != NULL)
+    {
+        option_parse_baudrates(string);
+        g_free((void *)string);
+        string = NULL;
+    }
+    config_get_bool(key_file, group, "auto-baud", &option.auto_baud_enabled);
+    if (option.baudrates_count <= 1)
+    {
+        option.auto_baud_enabled = false;
+    }
     config_get_integer(key_file, group, "databits", &option.databits, 5, 8);
     config_get_string(key_file, group, "flow", &string, "none", "hard", "soft", NULL);
     if (string != NULL)
